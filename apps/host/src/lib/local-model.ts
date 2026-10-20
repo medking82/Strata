@@ -8,6 +8,7 @@ export type LocalModelState = {
   error?: string | null;
   model: { id: string | null; name: string; variant: string | null; loaded: boolean | null; loading: boolean | null; apiBaseUrl: string };
   context: { choices: number[]; selected: number | null; effective: number | null; phase: string; activeRequests: number | null; error?: string | null };
+  autoUnload?: { choices: number[]; selected: number | null; effective: number | null };
   codexSync: { state: string; context?: number; auto_compact_token_limit?: number; max_input_tokens?: number; reload_required?: boolean } | null;
 };
 let current: LocalModelState | null = null;
@@ -42,6 +43,7 @@ export async function connectLocalModel() {
   return selection;
 }
 export async function changeLocalContext(tokens: number) { return request('context', { tokens }); }
+export async function changeLocalIdle(seconds: number) { return request('idle', { seconds }); }
 export async function controlLocalModel(action: 'load' | 'unload') { return request(action, {}); }
 export function startLocalModelUpdates(onConnectionChanged: () => Promise<void>) {
   let disposed = false;
