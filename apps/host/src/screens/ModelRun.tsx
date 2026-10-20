@@ -31,7 +31,12 @@ type Issue = {
     message: string;
 };
 type RunStage = 'idle' | 'checking' | 'loading' | 'ready';
+import { localModelEnabled } from '../lib/local-model';
+import { LocalModelScreen } from './LocalModel';
 export function ModelRunScreen() {
+    return localModelEnabled ? <LocalModelScreen /> : <OfficialModelRunScreen />;
+}
+function OfficialModelRunScreen() {
     const native = useNative();
     const location = parseLocation(window.location.hash), entry = location.param;
     const [other, setOther] = useState(entry === 'local' || entry === 'local-import'), [importFirst, setImportFirst] = useState(entry === 'local-import');

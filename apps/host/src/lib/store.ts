@@ -1,4 +1,5 @@
 import { plainFailure, plainFailureText } from './plain-errors';
+import { connectLocalModel, localModelEnabled, localModelSelection, refreshLocalModel } from './local-model';
 import { showcaseMessages, SHOWCASE_AGENTS } from './chat-showcase';
 import { updateAgent } from './agents';
 import { LOOP_USAGE, parseLoop, type LoopCommand } from './loop';
@@ -277,7 +278,8 @@ function set(patch: Partial<AppState> | ((s: AppState) => Partial<AppState>)) {
   state = { ...state, ...next };
   // Opening another chat shows that chat's model choice and whether that chat is mid-turn.
   if (state.activeSession !== before) {
-    const chosen = state.sessions.find(s => s.id === state.activeSession)?.preferences?.remoteModel ?? null;
+    const preferences = state.sessions.find(s => s.id === state.activeSession)?.preferences;
+    const chosen = preferences && 'remoteModel' in preferences ? preferences.remoteModel ?? null : localModelSelection();
     state = { ...state, remoteModel: 'remoteModel' in next ? state.remoteModel : chosen, streaming: !!state.activeSession && liveTurns.has(state.activeSession) };
   }
   for (const l of listeners) l();
@@ -316,6 +318,9 @@ function applyProviders(providers: ModelProviders) {
   // A chat whose API model was removed keeps its choice: the next send says the model is gone, rather
   // than quietly answering from the local model.
   set({ providers });
+}
+export async function refreshModelConnections() {
+  applyProviders(await api.get<ModelProviders>('/api/model-providers'));
 }
 export async function saveModelConnection(draft: ModelConnectionDraft) {
   applyProviders(await api.post<ModelProviders>('/api/model-providers', draft));
@@ -694,6 +699,7 @@ let closeEvents: (() => void) | null = null;
 export async function bootstrap() {
   applyPrefs();
   try {
+    if (localModelEnabled) await connectLocalModel().catch(() => undefined);
     const [setup, hardware, library, engine, serving, monitor, skills, providers, imageModels, runtime] = await Promise.all([
       api.get<SetupState>('/api/setup'),
       api.get<Hardware>('/api/hardware'),
@@ -724,6 +730,11 @@ export async function bootstrap() {
       connection: 'live',
     });
     applyProviders(providers);
+    if (localModelEnabled) {
+      const preferences = state.sessions.find(session => session.id === state.activeSession)?.preferences;
+      if (!preferences || !('remoteModel' in preferences)) set({ remoteModel: localModelSelection() });
+      await refreshLocalModel().catch(() => undefined);
+    }
     closeEvents?.();
     let reconnect = false;
     closeEvents = onEvent(applyEvent, (status) => {
@@ -1027,7 +1038,7 @@ export function newSession(): Session {
     workspace: state.workspaces.find(w => w.id === state.activeWorkspace)?.path ?? state.workspacePath,
     tokensIn: 0,
     tokensOut: 0,
-    ...(state.activeSession === null && state.remoteModel ? { preferences: { remoteModel: state.remoteModel } } : {}),
+    ...((state.activeSession === null ? state.remoteModel : localModelSelection()) ? { preferences: { remoteModel: state.activeSession === null ? state.remoteModel : localModelSelection() } } : {}),
   };
   const sessions = [session, ...state.sessions];
   persistSessions(sessions);
