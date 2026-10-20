@@ -47,11 +47,14 @@ async function load(enabled) {
 }
 test.after(() => { if (directory) rmSync(directory, { recursive: true, force: true }); });
 
-function fixtures({ expert = false, loaded = false, ram = 64 } = {}) {
+function fixtures({ expert = false, loaded = false, ram = 64, failedModel = '' } = {}) {
   const size = (id, model, experts) => ({ id, model, about: '', download_gb: 42, ram_needed_gb: experts + 1,
     experts_gb: experts, on_this_pc: 'fits', installed: true });
   globalThis.__native = {
-    available: true, repo: '', summary: '', error: null, jobs: [], instances: [], defaultId: null, fields: [], capabilities: {},
+    available: true, repo: '', summary: '', error: null,
+    jobs: failedModel ? [{ id: 'retained-failure', kind: 'install', state: 'error', model: failedModel,
+      family: 'qwen', error: 'Retained Failure For One Model' }] : [],
+    instances: [], defaultId: null, fields: [], capabilities: {},
     hardware: { ram_gb: ram, gpus: [{ index: 0, name: 'Fixture GPU', vram_gb: 16, usable: true }] },
     installed: { models: [{ model: 'swift-iq2_xs', config: 'swift.json', model_name: 'Swift', ready: true, context: 32768 }], data_folder: '/Models', engine: { version: '0.1.45.3' } },
     catalog: { families: [
@@ -96,6 +99,13 @@ test('hardware fit is calculated from the reported computer rather than a decora
   const html = await render('#/models', true, { ram: 16 });
   assert.match(html, /will be read from the SSD/);
   assert.doesNotMatch(html, /Fits fully in memory/);
+});
+
+test('retained install failures belong only to their model, not every catalog selection', async () => {
+  const unrelated = await render('#/models', true, { failedModel: 'iq3_s' });
+  assert.doesNotMatch(unrelated, /Retained Failure For One Model/);
+  const selected = await render('#/models', true, { failedModel: 'swift-iq2_xs' });
+  assert.match(selected, /Retained Failure For One Model/);
 });
 
 test('catalog Expert mode retains configuration, resource and model-file controls', async () => {
