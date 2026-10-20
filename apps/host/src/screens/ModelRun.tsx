@@ -1,6 +1,6 @@
 import { tr } from '../lib/i18n';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActionError, Btn, Dialog, ErrorNotice, Icon, Select } from '../components/ui';
+import { ActionError, Btn, Dialog, ErrorNotice, Icon, Seg, Select } from '../components/ui';
 import { Screen } from '../components/layout';
 import { DemoTest } from '../components/EngineExperience';
 import { RunExpertEditor } from '../components/RunExpertEditor';
@@ -25,16 +25,34 @@ import type { ImageModelChoice, RuntimeModels, RuntimeModel } from '../lib/types
 import { useNative } from '../lib/native';
 import { NativeModels } from '../components/NativeModels';
 import { NativeLocalModel } from '../components/NativeLocalModel';
-import { parseLocation } from '../lib/router';
+import { navigate, parseLocation, useLocation } from '../lib/router';
+import { localModelEnabled } from '../lib/local-model';
+import { LocalModelScreen } from './LocalModel';
+import './model-run.css';
 type Issue = {
     level: 'error' | 'warn';
     message: string;
 };
 type RunStage = 'idle' | 'checking' | 'loading' | 'ready';
-import { localModelEnabled } from '../lib/local-model';
-import { LocalModelScreen } from './LocalModel';
 export function ModelRunScreen() {
-    return localModelEnabled ? <LocalModelScreen /> : <OfficialModelRunScreen />;
+    const location = useLocation();
+    // Preserve the official default, variant and local-import entry points.
+    const view = location.param === 'current' && !location.query.has('variant') ? 'current' : 'catalog';
+    const catalog = <OfficialModelRunScreen key={`${location.param ?? ''}:${location.query.get('variant') ?? ''}`}/>;
+    if (!localModelEnabled) return catalog;
+    return <section className="model-run-views" aria-label={tr("Models")}>
+      <div className="model-run-nav">
+        <Seg value={view} panelId="model-run-panel" ariaLabel="Model Views"
+          options={[{ value: 'catalog', label: 'Model Catalog' }, { value: 'current', label: 'Current Model' }]}
+          onChange={value => navigate('models', value === 'current' ? 'current' : undefined)}/>
+        <p className="model-run-note">{tr(view === 'catalog'
+            ? 'Browse Models And Recommendations. Catalog Models Load Separately From Current Model.'
+            : 'Manage The Model Shared By This App And Codex.')}</p>
+      </div>
+      <div className="model-run-panel" id="model-run-panel" role="tabpanel" aria-labelledby={`model-run-panel-tab-${view}`} tabIndex={0}>
+        {view === 'current' ? <LocalModelScreen /> : catalog}
+      </div>
+    </section>;
 }
 function OfficialModelRunScreen() {
     const native = useNative();
